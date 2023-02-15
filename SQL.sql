@@ -535,6 +535,8 @@ GROUP BY Piece;
 
 -- 5.8 Increase all prices by one cent.
 
+
+
 ALTER TABLE Provides 
 ADD COLUMN "increased_price";
 
@@ -1129,17 +1131,303 @@ JOIN Undergoes
 ON Trained_In.Treatment = Undergoes.Procedure
 ; 
 
+-- 8.2 Same as the previous query, but include the following information in the results: Physician name, name of procedure, date when the procedure was carried out, name of the patient the procedure was carried out on.
+
+SELECT (SELECT Name from Physician WHERE EmployeeID = Undergoes.Physician) AS Name , Undergoes.Procedure, Undergoes.date, Procedures.Name
+FROM Undergoes
+JOIN Procedures
+ON Undergoes.Procedure = Procedures.Code 
+WHERE NOT EXISTS (SELECT * from Trained_In
+WHERE Undergoes.Procedure = Trained_In.Treatment AND Trained_In.Physician = Undergoes.Physician);
+
+
+-- 8.3 Obtain the names of all physicians that have performed a medical procedure that they are certified to perform, but such that the procedure was done at a date (Undergoes.Date) after the physician's certification expired (Trained_In.CertificationExpires).
+
+--subquery (undergoes.date > CertificationExpires
+SELECT Physician.Name, EmployeeID, Undergoes.Procedure
+FROM Physician
+JOIN Undergoes
+ON Physician.EmployeeID = Undergoes.Physician
+WHERE Undergoes.Date> (Select CertificationExpires from Trained_In );
+
+
+--CTE 
+WITH filtered_table AS (
+Select Undergoes.Physician, CertificationExpires, Procedure, Undergoes.Patient
+From Trained_In
+JOIN Undergoes
+ON Trained_In.Physician = Undergoes.Physician
+WHERE CertificationExpires < Undergoes.Date)
+
+
+Select Physician.Name
+FROM Physician
+JOIN (Select Undergoes.Physician as "doctor"
+From Trained_In
+JOIN Undergoes
+ON Trained_In.Physician = Undergoes.Physician
+WHERE CertificationExpires < Undergoes.Date
+ON Physician.EmployeeID = doctor;
+
+
+
+--subquery
+SELECT Physician.Name
+From Physician
+WHERE (
+
 
 -- 8.2 Same as the previous query, but include the following information in the results: Physician name, name of procedure, date when the procedure was carried out, name of the patient the procedure was carried out on.
 -- 8.3 Obtain the names of all physicians that have performed a medical procedure that they are certified to perform, but such that the procedure was done at a date (Undergoes.Date) after the physician's certification expired (Trained_In.CertificationExpires).
 -- 8.4 Same as the previous query, but include the following information in the results: Physician name, name of procedure, date when the procedure was carried out, name of the patient the procedure was carried out on, and date when the certification expired.
+
+WITH filtered_table AS (
+Select Undergoes.Physician, CertificationExpires, Procedure, Undergoes.Patient, Date
+From Trained_In
+JOIN Undergoes
+ON Trained_In.Physician = Undergoes.Physician
+WHERE CertificationExpires < Undergoes.Date)
+
+SELECT Physician.Name as "doctor name", Procedures.Name as "Procedure", Patient.Name as "Patient", Date as "Procedure date", CertificationExpires
+FROM Physician
+JOIN filtered_table
+ON Physician.EmployeeID = Filtered_table.Physician
+JOIN Procedures
+ON Procedures.Code = Filtered_table.Procedure
+JOIN Patient
+On patient.SSN = filtered_table.Patient
+;
+
 -- 8.5 Obtain the information for appointments where a patient met with a physician other than his/her primary care physician. Show the following information: Patient name, physician name, nurse name (if any), start and end time of appointment, examination room, and the name of the patient's primary care physician.
+
+-- first i will make a table with patient and Physician / Patient and PCP
+SELECT AppointmentID,SSN, Name as "patient name", PCP, Physician
+FROM Patient
+JOIN Appointment
+ON Appointment.Patient = Patient.SSN
+WHERE PCP != Physician;
+
+--CTE
+WITH appo AS (
+SELECT Name as "patient_name", PCP, Physician as "doctor", PrepNurse, Start, End, ExaminationRoom
+FROM Patient
+JOIN Appointment
+ON Appointment.Patient = Patient.SSN
+WHERE PCP != Physician)
+
+SELECT  patient_name, Physician.Name As "doctor",  PrepNurse, Start, End, ExaminationRoom
+FROM Physician
+JOIN appo
+ON Physician.EmployeeID = appo.doctor
+
+;
+
+
 -- 8.6 The Patient field in Undergoes is redundant, since we can obtain it from the Stay table. There are no constraints in force to prevent inconsistencies between these two tables. More specifically, the Undergoes table may include a row where the patient ID does not match the one we would obtain from the Stay table through the Undergoes.Stay foreign key. Select all rows from Undergoes that exhibit this inconsistency.
+--Es gibt zwei tabelle, undergoes and stay. In beiden tabllen gibt es stayID and patient. Finde die eintrag mit gleichen stayID aber unterschiedlichen patient.
+--stayID ist richtig, aber patient ist falsch, Undergoes patient 
+
+
+Select *
+FROM Undergoes
+WHERE Patient <> (
+SELECT Patient From Stay 
+Where Undergoes.Stay = Stay.StayID
+);
+SELECT Code FROM Procedures;
+
 -- 8.7 Obtain the names of all the nurses who have ever been on call for room 123.
+
+--CTE at first roomnumber 123 with blockfloor and BlockCode
+WITH Room123 AS (
+SELECT r.Number, r.BlockFloor, r.BlockCode
+FROM Room as r
+WHERE Number = 123) 
+
+SELECT Room123.Number, Nurse, (SELECT Name FROM Nurse WHERE Nurse.EmployeeID = o.Nurse) AS "Nurse Name" 
+FROM On_Call as o
+JOIN Room123
+ON r.Blockfloor = o.BlockFloor AND r.BlockCode = o.BlockCode
+WHERE o.BlockFloor = 1 AND o.BlockCode = 3;
+--doesn't work, so another way in following
+
+Select Number FROM Room WHERE Number= 123;
+
+Select  Nurse, (SELECT Name FROM Nurse WHERE Nurse.EmployeeID = On_Call.Nurse) AS "Nurse Name" 
+FROM On_Call
+WHERE BlockFloor = 1 AND BlockCode = 3;
+
 -- 8.8 The hospital has several examination rooms where appointments take place. Obtain the number of appointments that have taken place in each examination room.
+
+
+SELECT ExaminationRoom FROM Appointment ;
+SELECT ExaminationRoom, Count(*) From Appointment Group By ExaminationRoom;
+
 -- 8.9 Obtain the names of all patients and their primary care physician, such that the following are true:
-    -- The patient has been prescribed some medication by his/her primary care physician.
+
+SELECT Name, PCP
+FROM Patient;
+
+
+    -- The patient has been prescribed some medication by his/her primary care physician.#
+
+SELECT Name as "Patient", PCP, Medication
+FROM Patient
+JOIN Prescribes
+ON Patient.SSN = Prescribes.Patient
+WHERE Patient.PCP = Prescribes.Physician 
+;
+
     -- The patient has undergone a procedure with a cost larger that $5,000
+
+SELECT Patient.Name as "Patient", PCP, Procedures.Name as "Procedure", Procedures.Cost
+FROM Patient
+JOIN Undergoes
+ON Patient.SSN = Undergoes.Patient
+JOIN Procedures
+ON Undergoes.Procedure = Procedures.Code
+WHERE Cost > 5000;
+	
     -- The patient has had at least two appointments where the nurse who prepared the appointment was a registered nurse.
+
+    -- The patient has had at least two appointments 
+SELECT (Select Name FROM Patient WHERE Patient.SSN = Appointment.Patient) as "Patient", Count(Patient) as "number_of_appointments", PrepNurse
+FROM Appointment
+GROUP BY Patient
+HAVING number_of_appointments >=2 AND PrepNurse =(SELECT EmployeeID FROM Nurse WHERE Registered = 1);
+;
+
+SELECT EmployeeID FROM Nurse WHERE Registered = 1;
+--
+
     -- The patient's primary care physician is not the head of any department.
 
+SELECT Name, PCP
+FROM Patient;
+
+SELECT Patient.Name as "Patient_Name", PCP, Physician.Name as "Physician_name", Head as "Head_of_Department"
+From Patient
+JOIN Physician 
+ON Physician.EmployeeID = Patient.PCP 
+LEFT JOIN Department
+ON Department.Head = Physician.EmployeeID;
+
+----final answer
+SELECT Patient.Name, Physician.Name
+FROM Patient, Physician
+Where Patient.PCP = Physician.EmployeeID --all patient and their primary care physicians
+AND EXISTS(Select * from Prescribes Where Prescribes.Patient = Patient.SSN And Prescribes.Physician = Patient.PCP)
+AND EXISTS(SELECT * from Procedures, Undergoes Where Undergoes.Procedure = Procedures.Code AND Undergoes.Patient = Patient.SSN AND Procedures.Cost > 5000)
+AND 2<= (SELECT count(Appointment.AppointmentID) FROM Appointment, Nurse WHERE Appointment.PrepNurse = Nurse.EmployeeID AND Registered = 1)
+AND not patient.PCP in (SELECT Head From Department)
+;
+
+Task 9:
+
+
+Alter table cran_logs_2015_01_01
+RENAME To CranLogs;
+
+SELECT download_date, TRIM('"' ) FROM 
+
+update CranLogs
+set download_date=replace(download_date,'"',' ');
+
+update CranLogs
+set ip_id=replace(ip_id,'"',' ');
+
+
+
+-- 9.1 Give the package name and how many times they're downloaded. Order by the 2nd column descently.
+
+SELECT package, count(download_date) as "count_of_download" 
+FROM CranLogs
+GROUP By Package
+order by "count_of_download" DESC
+;
+ 
+-- 9.2 Give the package ranking (based on how many times it was downloaded) during 9AM to 11AM
+
+SELECT package, count(download_date) as "count_of_download", time 
+FROM CranLogs
+WHERE time BETWEEN '09:00:00' AND '11:00:00'
+GROUP By Package
+ORDER BY "count_of_download" DESC
+;
+ 
+
+-- 9.3 How many recordings are from China ("CN") or Japan("JP") or Singapore ("SG")?
+
+SELECT country, count(*) as "Number"
+FROM CranLogs
+where country ="CN"
+UNION
+SELECT country, count(*) as "Number"
+FROM CranLogs
+where country ="JP"
+UNION
+SELECT country, count(*) as "Number"
+FROM CranLogs
+where country ="SG";
+
+-- 9.4 Print the countries whose downloaded are more than the downloads from China ("CN")
+
+SELECT country, count(*) as "Number"
+FROM CranLogs
+GROUP BY country
+HAVING "Number" > (select count(*) from CranLogs where country = "CN");
+
+-- 9.5 Print the average length of the package name of all the UNIQUE packages
+SELECT DISTINCT round(AVG(length(DISTINCT package)))as "Average_length_of_package_name"
+from CranLogs;
+
+SELECT DISTINCT package, length(DISTINCT package) as "length_of_package_name"
+from CranLogs;
+-- 9.6 Get the package whose download count ranks 2nd (print package name and its download count).
+
+CREATE VIEW package_download_rank AS
+SELECT package, count(package) as "count_of_packages"
+FROM CranLogs
+GROUP BY package
+ORDER BY count(package) DESC;
+
+SELECT Package,count_of_packages,
+DENSE_RANK()OVER(ORDER BY count_of_packages DESC ) AS "download_rank"
+From package_download_rank
+;
+
+
+-- 9.7 Print the name of the package whose download count is bigger than 1000.
+SELECT package, count_of_packages
+FROM package_download_rank
+WHERE count_of_packages > 1000;
+
+-- 9.8 The field "r_os" is the operating system of the users.
+    -- 	Here we would like to know what main system we have (ignore version number), the relevant counts, and the proportion (in percentage).
+WITH os AS (
+SELECT Distinct r_os, count(*)
+FROM CranLogs
+Group by r_os)
+
+SELECT r_os,count(r_os) as "count_of_os"
+FROM CranLogs
+Where r_os like "darwin%"
+UNION
+SELECT r_os,count(r_os)as "count_of_os"
+FROM CranLogs
+Where r_os like "linux%"
+UNION
+SELECT r_os, count(r_os)as "count_of_os"
+FROM CranLogs
+Where r_os like "ming%"
+UNION 
+SELECT r_os, count(r_os)as "count_of_os"
+FROM CranLogs
+WHERE r_os like "N%"
+;
+
+Alter table CranLogs
+ADD COLUMN Percentage
+GENERATED ALWAYS AS (count_of_os/sum(count_of_os))
+;
+--6regexpress 
