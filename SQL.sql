@@ -1348,7 +1348,13 @@ order by "count_of_download" DESC
  
 -- 9.2 Give the package ranking (based on how many times it was downloaded) during 9AM to 11AM
 
-SELECT package, count(download_date) as "count_of_download", time 
+SELECT package, count(download_date) as "count_of_download", time,
+	dense_RANK () OVER ( 
+		ORDER BY count(download_date) DESC
+	) downloadRank,
+	row_number()  OVER ( 
+		ORDER BY count(download_date) DESC
+	) rowrank
 FROM CranLogs
 WHERE time BETWEEN '09:00:00' AND '11:00:00'
 GROUP By Package
@@ -1357,7 +1363,27 @@ ORDER BY "count_of_download" DESC
  
 
 -- 9.3 How many recordings are from China ("CN") or Japan("JP") or Singapore ("SG")?
+CREATE INDEX CranLogsCountry 
+ON CranLogs(country);
 
+-- subquery
+SELECT DISTINCT(country), (SELECT count(*) from CranLogs x where c.country = x.country) as "Number"
+FROM CranLogs c
+where c.country IN ("CN","JP","SG");
+
+-- group having
+SELECT
+	country,
+	COUNT(*)
+FROM
+	CranLogs
+GROUP BY
+	country
+having country IN ("CN","JP","SG");
+
+select distinct(country) from CranLogs
+
+--union
 SELECT country, count(*) as "Number"
 FROM CranLogs
 where country ="CN"
@@ -1390,7 +1416,6 @@ SELECT package, count(package) as "count_of_packages"
 FROM CranLogs
 GROUP BY package
 ORDER BY count(package) DESC;
-
 SELECT Package,count_of_packages,
 DENSE_RANK()OVER(ORDER BY count_of_packages DESC ) AS "download_rank"
 From package_download_rank
@@ -1404,6 +1429,9 @@ WHERE count_of_packages > 1000;
 
 -- 9.8 The field "r_os" is the operating system of the users.
     -- 	Here we would like to know what main system we have (ignore version number), the relevant counts, and the proportion (in percentage).
+Select DISTINCT r_os
+From CranLogs; 
+
 WITH os AS (
 SELECT Distinct r_os, count(*)
 FROM CranLogs
@@ -1426,8 +1454,34 @@ FROM CranLogs
 WHERE r_os like "N%"
 ;
 
+--it doesn't work, bacause count_of_sum is in another query.  
 Alter table CranLogs
 ADD COLUMN Percentage
 GENERATED ALWAYS AS (count_of_os/sum(count_of_os))
 ;
+
+--heiko variant1
+SELECT "Darwin" AS r_os ,count(r_os) as "count_of_os", 100*count(r_os)/(SELECT count(*) FROM CranLogs) AS percentage
+FROM CranLogs
+Where r_os like "darwin%"
+UNION
+SELECT "Linux",count(r_os)as "count_of_os", 100*count(r_os)/(SELECT count(*) FROM CranLogs)
+FROM CranLogs
+Where r_os like "linux%"
+UNION
+SELECT "Ming", count(r_os)as "count_of_os", 100*count(r_os)/(SELECT count(*) FROM CranLogs)
+FROM CranLogs
+Where r_os like "ming%"
+UNION 
+SELECT "NA", count(r_os)as "count_of_os", 100*count(r_os)/(SELECT count(*) FROM CranLogs)
+FROM CranLogs
+WHERE r_os like "N%"
+;
+
+--rtrim
+select rtrim(r_os, "0123456789.") as os, count(*) as "count_of_os", 
+round(100.0*count(*)/(SELECT count(*) FROM CranLogs),2) as percentage
+from CranLogs
+GROUP by os;
+
 --6regexpress 
