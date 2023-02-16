@@ -1485,3 +1485,92 @@ from CranLogs
 GROUP by os;
 
 --6regexpress 
+
+CREATE TABLE PEOPLE (id INTEGER, name CHAR);
+
+INSERT INTO PEOPLE VALUES(1, "A");
+INSERT INTO PEOPLE VALUES(2, "B");
+INSERT INTO PEOPLE VALUES(3, "C");
+INSERT INTO PEOPLE VALUES(4, "D");
+
+CREATE TABLE ADDRESS (id INTEGER, address CHAR, updatedate date);
+
+INSERT INTO ADDRESS VALUES(1, "address-1-1", "2016-01-01");
+INSERT INTO ADDRESS VALUES(1, "address-1-2", "2016-09-02");
+INSERT INTO ADDRESS VALUES(2, "address-2-1", "2015-11-01");
+INSERT INTO ADDRESS VALUES(3, "address-3-1", "2016-12-01");
+INSERT INTO ADDRESS VALUES(3, "address-3-2", "2014-09-11");
+INSERT INTO ADDRESS VALUES(3, "address-3-3", "2015-01-01");
+INSERT INTO ADDRESS VALUES(4, "address-4-1", "2010-05-21");
+INSERT INTO ADDRESS VALUES(4, "address-4-2", "2012-02-11");
+INSERT INTO ADDRESS VALUES(4, "address-4-3", "2015-04-27");
+INSERT INTO ADDRESS VALUES(4, "address-4-4", "2014-01-01");
+
+
+SELECT * from People;
+SELECT * from address;
+
+SELECT * from PEOPLE  INNER JOIN address On PEOPLE.id = address.id;
+
+-- 10.1 Join table PEOPLE and ADDRESS, but keep only one address information for each person (we don't mind which record we take for each person). 
+    -- i.e., the joined table should have the same number of rows as table PEOPLE
+SELECT *
+from PEOPLE
+Where id IN (SELECT distinct id from address)
+;
+
+SELECT *
+FROM PEOPLE
+left Join address
+ON PEOPLE.id = address.id
+Group By people.id;
+
+-- 10.2 Join table PEOPLE and ADDRESS, but ONLY keep the LATEST address information for each person. 
+    -- i.e., the joined table should have the same number of rows as table PEOPLE
+
+SELECT people.id, address as latest_address, Max(updatedate)as latest_date
+from PEOPLE  
+INNER JOIN address 
+On PEOPLE.id = address.id
+Group by people.id 
+;
+
+
+
+			
+
+
+--day 11 ecomm.db
+CREATE INDEX AssessmentASIN ON assessment(ASIN);
+CREATE Index ProductsType ON products(product_type);
+CREATE INDEX productsASIN on products(ASIN);
+
+SELECT product_type, round(AVG(rating),2)
+FROM products
+JOIN assessment
+ON products.index_col = assessment.index_col
+GROUP BY product_type;
+
+--Question 1: What are the average ratings for each product type?
+
+SELECT product_type, round(AVG(rating),2)
+FROM products
+JOIN assessment
+ON products.index_col = assessment.index_col
+GROUP BY product_type;
+
+--Question 2 & 3: What are the top 3 products in each product segment by customer rating?
+--Are they the most reviewed products as well?
+--Are they the most reviewed products as well?
+
+
+
+--Question 4: What are the top 3 selling products in each product segment?
+
+--Question 5: What are the top 5 items generating the maximum sales revenue?
+
+--Question 6: What are the top 5 countries generating the max sales revenue, excluding the host country (Germany)?
+
+--Question 7: What are the first and second worst-selling products in every category?
+
+--Question 8: Unique customers per month for the year 2019
